@@ -94,6 +94,18 @@ app.post("/stt", async (req, res) => {
         encoding: "FLAC",
         sampleRateHertz: 16000,
         languageCode,
+        enableAutomaticPunctuation: true, // 自動加入標點符號
+
+        //開啟說話者辨識 (區分醫生與病患)
+        diarizationConfig: {
+          enableSpeakerDiarization: true,
+          minSpeakerCount: 2, // 最少 2 人
+          maxSpeakerCount: 2, // 最多 3 人 (依實際情況調整)
+        },
+
+        //使用增強模型 (通常對電話或錄音檔效果較好)
+        useEnhanced: true,
+        model: "default" 
       },
       audio: {
         content: flacBase64,
