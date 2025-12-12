@@ -29,7 +29,7 @@ export default function RecordScreen() {
 
       const requestBody = {
         audioBase64: audioContentBase64,
-        languageCode: "zh-TW",
+        languageCode: "en-US",
       };
 
       // 3. 發送 POST 請求到 STT server
