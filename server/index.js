@@ -9,6 +9,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import express from "express";
 import ffmpegPath from "ffmpeg-static";
+import ffprobePath from "ffprobe-static";
 dotenv.config({ path: path.resolve(process.cwd(), "..", ".env") });
 
 const app = express();
@@ -24,7 +25,7 @@ if (!GOOGLE_API_KEY) {
 
 const GEMINI_API_KEY =
   process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.EXPO_PUBLIC_GOOGLE_API_KEY || "";
-const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3-pro-preview";
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-1.5-flash-latest";
 if (!GEMINI_API_KEY) {
   console.warn("[stt-server] 找不到 GEMINI_API_KEY（可先沿用 GOOGLE_API_KEY），/summary 將無法使用。");
 }
@@ -338,6 +339,96 @@ ${transcription}`;
 });
 
 /**
+ * Helper function to get audio duration using ffprobe
+ */
+async function getAudioDuration(filePath) {
+  return new Promise((resolve, reject) => {
+    if (!ffprobePath?.path) {
+      reject(new Error("找不到 ffprobe"));
+      return;
+    }
+
+    // Use ffprobe (comes from ffprobe-static) to get duration
+    const ffprobeArgs = [
+      "-v", "error",
+      "-show_entries", "format=duration",
+      "-of", "default=noprint_wrappers=1:nokey=1",
+      filePath
+    ];
+
+    const child = spawn(ffprobePath.path, ffprobeArgs, {
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+
+    let stdout = "";
+    let stderr = "";
+
+    child.stdout.on("data", (d) => {
+      stdout += d.toString();
+    });
+
+    child.stderr.on("data", (d) => {
+      stderr += d.toString();
+    });
+
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code === 0) {
+        const duration = parseFloat(stdout.trim());
+        resolve(duration);
+      } else {
+        reject(new Error(`ffprobe 失敗 (code=${code})\n${stderr}`));
+      }
+    });
+  });
+}
+
+/**
+ * Helper function to split audio into chunks
+ */
+async function splitAudioIntoChunks(inputPath, tmpDir, chunkDurationSeconds = 50) {
+  const duration = await getAudioDuration(inputPath);
+
+  if (duration <= 55) {
+    // Audio is short enough, no need to split
+    return [{ path: inputPath, start: 0, duration }];
+  }
+
+  const chunks = [];
+  let currentTime = 0;
+  let chunkIndex = 0;
+
+  while (currentTime < duration) {
+    const chunkPath = path.join(tmpDir, `chunk_${chunkIndex}.flac`);
+    const chunkDuration = Math.min(chunkDurationSeconds, duration - currentTime);
+
+    // Extract chunk using ffmpeg
+    await runFfmpeg([
+      "-y",
+      "-i", inputPath,
+      "-ss", currentTime.toString(),
+      "-t", chunkDuration.toString(),
+      "-ac", "1",
+      "-ar", "16000",
+      "-vn",
+      chunkPath
+    ]);
+
+    chunks.push({
+      path: chunkPath,
+      start: currentTime,
+      duration: chunkDuration,
+      index: chunkIndex
+    });
+
+    currentTime += chunkDuration;
+    chunkIndex++;
+  }
+
+  return chunks;
+}
+
+/**
  * POST /stt
  * body:
  *  - audioBase64: string (m4a/aac base64，不要帶 data:... 前綴)
@@ -357,125 +448,121 @@ app.post("/stt", async (req, res) => {
 
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "stt-"));
   const inputPath = path.join(tmpDir, "input.m4a");
-  const outputPath = path.join(tmpDir, "output.flac");
 
   try {
     const inputBuf = Buffer.from(audioBase64, "base64");
     await fs.writeFile(inputPath, inputBuf);
 
-    // 轉成 Google STT v1 支援的 FLAC，並統一成 16kHz/mono（較省、也常見於語音）
-    await runFfmpeg([
-      "-y",
-      "-i",
-      inputPath,
-      "-ac",
-      "1",
-      "-ar",
-      "16000",
-      "-vn",
-      outputPath,
-    ]);
+    // Get audio duration and split if necessary
+    const chunks = await splitAudioIntoChunks(inputPath, tmpDir, 50);
 
-    const flacBuf = await fs.readFile(outputPath);
-    const flacBase64 = flacBuf.toString("base64");
+    console.log(`[STT] Processing ${chunks.length} chunk(s) for audio`);
 
-    const requestBody = {
-      config: {
-        encoding: "FLAC",
-        sampleRateHertz: 16000,
-        languageCode,
-        enableAutomaticPunctuation: true, // 自動加入標點符號
-        // 為了讓 diarization 的 words 更穩定地出現在回應中（包含 speakerTag）
-        enableWordTimeOffsets: true,
+    // Process each chunk
+    const chunkResults = [];
 
-        //開啟說話者辨識 (區分醫生與病患)
-        diarizationConfig: {
-          enableSpeakerDiarization: true,
-          minSpeakerCount: 2, // 最少 2 人
-          maxSpeakerCount: 2, // 最多 3 人 (依實際情況調整)
+    for (const chunk of chunks) {
+      const flacBuf = await fs.readFile(chunk.path);
+      const flacBase64 = flacBuf.toString("base64");
+
+      const requestBody = {
+        config: {
+          encoding: "FLAC",
+          sampleRateHertz: 16000,
+          languageCode,
+          enableAutomaticPunctuation: true,
+          enableWordTimeOffsets: true,
+          diarizationConfig: {
+            enableSpeakerDiarization: true,
+            minSpeakerCount: 2,
+            maxSpeakerCount: 2,
+          },
+          useEnhanced: true,
+          model: "default"
         },
+        audio: {
+          content: flacBase64,
+        },
+      };
 
-        //使用增強模型 (通常對電話或錄音檔效果較好)
-        useEnhanced: true,
-        model: "default" 
-      },
-      audio: {
-        content: flacBase64,
-      },
-    };
-
-    let result;
-    try {
-      result = await googleSpeechRecognize({ apiKey: GOOGLE_API_KEY, requestBody });
-    } catch (err) {
-      const status = err?.status || 500;
-      const payload = err?.payload;
-      if (payload && (payload.error || payload.errors)) {
-        res.status(status).json(payload);
-      } else {
-        res.status(status).json({ error: { message: err?.message || String(err) } });
+      let result;
+      try {
+        console.log(`[STT] Processing chunk ${chunk.index + 1}/${chunks.length}`);
+        result = await googleSpeechRecognize({ apiKey: GOOGLE_API_KEY, requestBody });
+        chunkResults.push({ chunk, result });
+      } catch (err) {
+        const status = err?.status || 500;
+        const payload = err?.payload;
+        if (payload && (payload.error || payload.errors)) {
+          res.status(status).json(payload);
+        } else {
+          res.status(status).json({ error: { message: err?.message || String(err) } });
+        }
+        return;
       }
-      return;
     }
 
+    // Combine results from all chunks
     let transcription = "";
-    
-    // 中文不要硬塞空格，英文等語系才加空格
     const isZh = typeof languageCode === "string" && languageCode.toLowerCase().startsWith("zh");
     const joiner = isZh ? "" : " ";
 
-    // 1) diarization：不要把所有 results 的 words 全展平（會混到沒有 speakerTag 的片段，導致 [說話者 undefined]）
-    const results = Array.isArray(result?.results) ? result.results : [];
-    let diarizedWords = [];
+    // Process each chunk's result
+    for (let i = 0; i < chunkResults.length; i++) {
+      const { result } = chunkResults[i];
+      const results = Array.isArray(result?.results) ? result.results : [];
+      let diarizedWords = [];
 
-    // 從後往前找：通常 diarization 完整結果會出現在最後幾個 result
-    for (let idx = results.length - 1; idx >= 0; idx -= 1) {
-      const w = results?.[idx]?.alternatives?.[0]?.words || [];
-      const hasSpeakerTag = Array.isArray(w) && w.some((x) => Number.isFinite(x?.speakerTag));
-      if (hasSpeakerTag) {
-        diarizedWords = w;
-        break;
+      // Find diarization results
+      for (let idx = results.length - 1; idx >= 0; idx -= 1) {
+        const w = results?.[idx]?.alternatives?.[0]?.words || [];
+        const hasSpeakerTag = Array.isArray(w) && w.some((x) => Number.isFinite(x?.speakerTag));
+        if (hasSpeakerTag) {
+          diarizedWords = w;
+          break;
+        }
+      }
+
+      if (diarizedWords.length > 0) {
+        let currentSpeaker = null;
+        let started = i > 0; // If not first chunk, we've already started
+
+        diarizedWords.forEach((wordInfo) => {
+          const word = wordInfo?.word ?? "";
+          if (!word) return;
+
+          const speakerTag = Number.isFinite(wordInfo?.speakerTag) ? wordInfo.speakerTag : null;
+
+          if (speakerTag === null) {
+            transcription += word + joiner;
+            return;
+          }
+
+          if (currentSpeaker !== speakerTag) {
+            if (started) transcription += "\n\n";
+            transcription += `[說話者 ${speakerTag}]: `;
+            currentSpeaker = speakerTag;
+            started = true;
+          }
+
+          transcription += word + joiner;
+        });
+      } else {
+        // Fallback: no diarization
+        const chunkText = results.map((r) => r?.alternatives?.[0]?.transcript).filter(Boolean).join("\n") || "";
+        if (chunkText) {
+          if (i > 0 && transcription) transcription += "\n";
+          transcription += chunkText;
+        }
       }
     }
 
-    if (diarizedWords.length > 0) {
-      let currentSpeaker = null;
-      let started = false;
-
-      diarizedWords.forEach((wordInfo) => {
-        const word = wordInfo?.word ?? "";
-        if (!word) return;
-
-        const speakerTag = Number.isFinite(wordInfo?.speakerTag) ? wordInfo.speakerTag : null;
-
-        // 沒有 speakerTag：
-        // - 若已經有 currentSpeaker，就視為同一段落繼續接（避免印出 undefined）
-        // - 若還沒開始任何段落，就先忽略標籤、直接累積文字（不加 [說話者 ...]）
-        if (speakerTag === null) {
-          transcription += word + joiner;
-          return;
-        }
-
-        if (currentSpeaker !== speakerTag) {
-          if (started) transcription += "\n\n";
-          transcription += `[說話者 ${speakerTag}]: `;
-          currentSpeaker = speakerTag;
-          started = true;
-        }
-
-        transcription += word + joiner;
-      });
-
-      transcription = transcription.trimEnd();
-    } else {
-      // 2) fallback：沒有 diarization words，就回到純 transcript 拼接
-      transcription =
-        results.map((r) => r?.alternatives?.[0]?.transcript).filter(Boolean).join("\n") || "";
-    }
+    transcription = transcription.trimEnd();
 
     res.json({
       transcription,
-      raw: result,
+      chunksProcessed: chunks.length,
+      raw: chunkResults.map(cr => cr.result),
     });
   } catch (e) {
     res.status(500).json({ error: e?.message || String(e) });

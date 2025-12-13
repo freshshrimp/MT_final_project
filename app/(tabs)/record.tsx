@@ -1,11 +1,11 @@
 import * as FileSystem from 'expo-file-system/legacy'; // SDK 54 起：legacy methods 需從 /legacy 匯入
 import React, { useState } from "react";
-import { StyleSheet, Text, View, ScrollView } from "react-native";
+import { ScrollView, StyleSheet, Text } from "react-native";
 
 //自訂的component
 import AudioRecorder from '@/components/AudioRecorder';
-import ResultDisplay from '@/components/ResultDisplay';
 import ElderSummaryDisplay, { type ElderSummary } from "@/components/ElderSummaryDisplay";
+import ResultDisplay from '@/components/ResultDisplay';
 
 export default function RecordScreen() {
   const [analysisText, setAnalysisText] = useState("");
@@ -54,7 +54,6 @@ export default function RecordScreen() {
       if (response.ok) {
         const transcription = result?.transcription || "";
         if (transcription) {
-          setAnalysisText(`✅ 轉錄成功：\n\n${transcription}`);
 
           // 4) 轉錄成功後，呼叫 /summary 讓 Gemini 摘要成長輩友善 JSON
           const summaryResp = await fetch(getSummaryUrl(), {
@@ -70,14 +69,25 @@ export default function RecordScreen() {
             setSummary(summaryResult?.summary ?? null);
           } else {
             console.error("Summary Server Error:", summaryResult);
-            setAnalysisText((prev) => `${prev}\n\n❌ 摘要失敗：${summaryResult?.error || "未知錯誤"}`);
+            setAnalysisText(`❌ 摘要失敗：${summaryResult?.error || "未知錯誤"}`);
           }
         } else {
           setAnalysisText("⚠️ 轉錄完成，但沒有辨識出任何文字 (可能是聲音太小或空白)。");
         }
       } else {
         console.error("STT Server Error:", result);
-        setAnalysisText(`❌ 轉錄失敗: ${result.error?.message || result.error || "未知錯誤"}`);
+
+        // Check for specific error types
+        const errorMessage = result.error?.message || result.error || "未知錯誤";
+        const errorStatus = result.error?.status;
+
+        if (errorStatus === "AUDIO_TOO_LARGE" || errorMessage.includes("exceeds duration limit")) {
+          setAnalysisText(`❌ 錄音檔太大或時間太長\n\n請錄製較短的音訊（建議60秒以內）`);
+        } else if (errorMessage.includes("INVALID_ARGUMENT")) {
+          setAnalysisText(`❌ 音訊格式錯誤或檔案損壞\n\n${errorMessage}`);
+        } else {
+          setAnalysisText(`❌ 轉錄失敗: ${errorMessage}`);
+        }
       }
 
     } catch (err) {
@@ -89,8 +99,8 @@ export default function RecordScreen() {
   };
 
   return (
-    <ScrollView 
-      style={styles.container} 
+    <ScrollView
+      style={styles.container}
       contentContainerStyle={styles.scrollContent}
     >
       <Text style={styles.title}>🎤 語音轉文字 (Google STT)</Text>
@@ -115,7 +125,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 20,
     paddingTop: 70,
-    paddingBottom: 50, // 增加底部留白，避免滑到底時被手機邊緣切到
+    paddingBottom: 40, // 增加底部留白，避免滑到底時被手機邊緣切到
   },
   title: {
     fontSize: 24,
