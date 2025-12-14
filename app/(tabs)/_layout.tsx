@@ -28,7 +28,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="analysis" // 對應 app/(tabs)/analysis.tsx
         options={{
-          title: '分析報告',
+          title: 'Report',
           headerShown: true, // 確保導航過去時有標題欄
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="doc.text.fill" color={color} />,
         }}

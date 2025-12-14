@@ -121,7 +121,7 @@ export default function RecordScreen() {
       style={styles.container}
       contentContainerStyle={styles.scrollContent}
     >
-      <Text style={styles.title}>🎤 Speech to Text (Google STT)</Text>
+      <Text style={styles.title}>Speech to Text (Google STT)</Text>
 
       {/* 錄音元件 */}
       <AudioRecorder onRecordingFinished={uploadAudioToServer} />

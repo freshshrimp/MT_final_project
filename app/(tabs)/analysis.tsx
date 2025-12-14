@@ -3,13 +3,15 @@ import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import ElderSummaryDisplay, { type ElderSummary } from "@/components/ElderSummaryDisplay";
-import ResultDisplay from '@/components/ResultDisplay';
+// 移除 ResultDisplay 的引入，因為不再顯示原始轉錄文字
+// import ResultDisplay from '@/components/ResultDisplay';
 
 /**
  * 分析結果顯示頁面
  * 透過路由參數接收 transcription (轉錄文字) 和 summaryJson (結構化摘要 JSON 字串)
  */
 export default function AnalysisScreen() {
+  // 保持接收參數，因為我們需要用 transcription 來顯示錯誤訊息（如果摘要失敗）
   const { transcription, summaryJson } = useLocalSearchParams<{ transcription?: string, summaryJson?: string }>();
 
   let summary: ElderSummary | null = null;
@@ -25,29 +27,31 @@ export default function AnalysisScreen() {
       }
     } catch (e) {
       console.error("解析 ElderSummary JSON 失敗:", e);
+      // 如果解析失敗，將錯誤訊息附加到 analysisText 中，並在下方錯誤區塊中顯示
       analysisText = analysisText + "\n\n❌ 錯誤：無法載入結構化摘要資料。";
     }
   }
 
   return (
     <>
-      <Stack.Screen options={{ title: '分析結果' }} />
+      <Stack.Screen options={{ title: 'Report' }} />
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.scrollContent}
       >
         <Text style={styles.title}>🎙️ 語音分析報告</Text>
         
-        {/* 轉錄文字顯示 (保留) */}
-        <ResultDisplay text={analysisText} />
+        {/* 轉錄文字顯示區塊已移除 */}
+        {/* <ResultDisplay text={analysisText} /> */}
 
         {/* LLM 結構化摘要顯示 (分段/朗讀功能已包含) */}
         {summary ? (
           <ElderSummaryDisplay summary={summary} />
         ) : (
-          // 當 summary 無法載入或為 null 時的錯誤提示
+          // 當 summary 無法載入或為 null 時的錯誤提示，同時顯示原始轉錄內容作為參考
           <View style={styles.errorContainer}>
-              <Text style={styles.errorText}>無法顯示結構化摘要。資料載入失敗或格式錯誤。</Text>
+              <Text style={styles.errorText}>❌ 無法顯示結構化摘要。資料載入失敗或格式錯誤。</Text>
+              <Text style={styles.errorTextDetail}>原始轉錄文字：{analysisText}</Text>
           </View>
         )}
       </ScrollView>
@@ -83,5 +87,11 @@ const styles = StyleSheet.create({
   errorText: {
     color: '#b91c1c',
     fontSize: 16,
+    fontWeight: 'bold',
+  },
+  errorTextDetail: {
+    color: '#b91c1c',
+    fontSize: 14,
+    marginTop: 5,
   }
 });
