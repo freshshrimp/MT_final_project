@@ -95,8 +95,14 @@ const handleReadAloud = async () => {
 
 const ElderSummaryDisplay: React.FC<{ summary: ElderSummary }> = ({ summary }) => {
     
-    // 將 audio_summary 內容作為 Diagnosis 區塊的朗讀腳本 (因為它涵蓋了核心資訊)
-    const diagnosisTextToRead = summary?.audio_summary;
+    // VVV [移除] 將 audio_summary 內容作為 Diagnosis 區塊的朗讀腳本 VVV
+    // const diagnosisTextToRead = summary?.audio_summary;
+
+    // VVV [新增] 改為建構一個僅包含診斷信息的朗讀腳本 VVV
+    const diagnosisTextToRead = [
+        summary?.diagnosis?.condition?.trim(),
+        summary?.diagnosis?.reason?.trim() ? `Possible Cause: ${summary.diagnosis.reason}` : null,
+    ].filter(Boolean).join('. '); // 使用句號分隔條件和原因
 
     return (
         <View style={styles.card}>
@@ -105,7 +111,7 @@ const ElderSummaryDisplay: React.FC<{ summary: ElderSummary }> = ({ summary }) =
             {/* 1. 診斷結果 (Diagnosis) */}
             <SummaryBlock 
                 title="1. What the Doctor Said (診斷結果)" 
-                textToRead={diagnosisTextToRead} // 使用 audio_summary 作為朗讀腳本
+                textToRead={diagnosisTextToRead} // <-- 使用新的 diagnosisTextToRead
             >
                 <Text style={styles.text}>
                     {summary?.diagnosis?.condition?.trim() ? summary.diagnosis.condition : "The doctor did not specify a condition today."}
