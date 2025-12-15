@@ -1,8 +1,10 @@
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import React, { useState, useCallback } from 'react';
-import { FlatList, StyleSheet, Text, TouchableOpacity, View, ActivityIndicator } from 'react-native';
+// VVV 引入 Alert 和 Button VVV
+import { FlatList, StyleSheet, Text, TouchableOpacity, View, ActivityIndicator, Alert, Button } from 'react-native'; 
 
-import { getRecords, HealthRecord } from '@/services/historyService';
+// VVV 引入 deleteRecord VVV
+import { getRecords, HealthRecord, deleteRecord } from '@/services/historyService';
 
 // 定義列表顯示需要的類型
 type HistoryListItem = Pick<HealthRecord, 'id' | 'date' | 'transcription'>;
@@ -31,6 +33,31 @@ export default function HistoryScreen() {
       loadRecords();
     }, [])
   );
+  
+  // VVV 新增刪除處理函式 VVV
+  const handleDeleteRecord = (id: string, date: string) => {
+    Alert.alert(
+      "確認刪除紀錄",
+      `您確定要刪除 ${date} 的看診紀錄嗎？此操作不可逆。`,
+      [
+        {
+          text: "取消",
+          style: "cancel"
+        },
+        {
+          text: "確認刪除",
+          style: "destructive",
+          onPress: async () => {
+            await deleteRecord(id);
+            // 刪除後刷新列表
+            loadRecords(); 
+          }
+        }
+      ]
+    );
+  };
+  // ^^^ 新增刪除處理函式 ^^^
+
 
   const handlePressRecord = (record: HistoryListItem) => {
     // 導航到 analysis 頁面，並傳遞 recordId
@@ -43,21 +70,34 @@ export default function HistoryScreen() {
   };
 
   const renderItem = ({ item }: { item: HistoryListItem }) => (
-    <TouchableOpacity style={styles.recordItem} onPress={() => handlePressRecord(item)}>
-      <Text style={styles.recordDate}>{item.date}</Text>
-      {/* 顯示轉錄內容的第一行或前 50 字作為預覽 */}
-      <Text style={styles.recordPreview} numberOfLines={1}>
-        {item.transcription.split('\n')[0]?.substring(0, 50).trim() || '無轉錄內容'}...
-      </Text>
-      <Text style={styles.recordArrow}>&gt;</Text>
-    </TouchableOpacity>
+    <View style={styles.recordItemContainer}>
+      {/* 點擊主體區域進入詳情 */}
+      <TouchableOpacity style={styles.recordItem} onPress={() => handlePressRecord(item)}>
+        <Text style={styles.recordDate}>{item.date}</Text>
+        {/* 顯示轉錄內容的第一行或前 50 字作為預覽 */}
+        <Text style={styles.recordPreview} numberOfLines={1}>
+          {item.transcription.split('\n')[0]?.substring(0, 50).trim() || '無轉錄內容'}...
+        </Text>
+        <Text style={styles.recordArrow}>&gt;</Text>
+      </TouchableOpacity>
+      
+      {/* VVV 刪除按鈕 VVV */}
+      <View style={styles.deleteButtonWrapper}>
+        <Button 
+          title="刪除" 
+          onPress={() => handleDeleteRecord(item.id, item.date)} 
+          color="#cc0000"
+        />
+      </View>
+      {/* ^^^ 刪除按鈕 ^^^ */}
+    </View>
   );
 
   return (
     <>
       <Stack.Screen options={{ title: '看診紀錄' }} />
       <View style={styles.container}>
-        <Text style={styles.title}>歷史看診紀錄</Text>
+        <Text style={styles.title}>📅 歷史看診紀錄</Text>
         
         {loading ? (
           <View style={styles.loadingContainer}>
@@ -95,13 +135,13 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: '#1f2937',
   },
-  recordItem: {
+  // VVV [新增] 包裹容器 VVV
+  recordItemContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
-    padding: 15,
-    borderRadius: 8,
     marginBottom: 10,
+    backgroundColor: '#fff',
+    borderRadius: 8,
     borderLeftWidth: 5,
     borderLeftColor: '#3b82f6',
     shadowColor: "#000",
@@ -109,12 +149,22 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 1,
     elevation: 2,
+    overflow: 'hidden', // 確保圓角效果
   },
+  // VVV [修改] 讓主體佔滿大部分空間 VVV
+  recordItem: {
+    flex: 1, 
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 15,
+    paddingRight: 10, // 稍微縮小右邊距，給刪除按鈕留空間
+  },
+  // ^^^ [修改] ^^^
   recordDate: {
     fontSize: 16,
     fontWeight: '600',
     color: '#1f2937',
-    width: 120, 
+    width: 100, // 縮小日期寬度
     marginRight: 10,
   },
   recordPreview: {
@@ -128,6 +178,12 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#9ca3af',
   },
+  // VVV [新增] 刪除按鈕樣式 VVV
+  deleteButtonWrapper: {
+    width: 65,
+    paddingRight: 5,
+  },
+  // ^^^ [新增] ^^^
   message: {
     textAlign: 'center',
     marginTop: 50,

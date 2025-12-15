@@ -66,3 +66,23 @@ export async function getRecordById(id: string): Promise<HealthRecord | undefine
   const records = await getRecords();
   return records.find(r => r.id === id);
 }
+
+
+//根據 ID 刪除一筆看診紀錄。
+
+export async function deleteRecord(id: string): Promise<void> {
+  try {
+    const existingRecords = await getRecords();
+    
+    // 篩選掉 ID 相符的紀錄，保留其餘的
+    const updatedRecords = existingRecords.filter(r => r.id !== id);
+
+    // 將更新後的紀錄列表寫回 AsyncStorage
+    const jsonValue = JSON.stringify(updatedRecords);
+    await AsyncStorage.setItem(STORAGE_KEY, jsonValue);
+    console.log(`Record with ID ${id} deleted successfully.`);
+  } catch (e) {
+    console.error("Failed to delete record from AsyncStorage", e);
+    // 即使刪除失敗，也不拋出錯誤，讓應用程式繼續運行
+  }
+}
