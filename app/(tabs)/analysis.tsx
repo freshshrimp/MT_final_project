@@ -6,9 +6,7 @@ import ElderSummaryDisplay, { type ElderSummary } from "@/components/ElderSummar
 // 引入歷史服務
 import { getRecordById } from '@/services/historyService'; 
 
-/**
- * 分析結果顯示頁面
- */
+/*分析結果顯示頁面*/
 export default function AnalysisScreen() {
   const { transcription, summaryJson, recordId } = useLocalSearchParams<{ 
     transcription?: string, 
@@ -99,7 +97,6 @@ export default function AnalysisScreen() {
 }
 
 const styles = StyleSheet.create({
-    // ... (樣式保持不變，新增 loading 相關樣式)
   container: {
     flex: 1,
     backgroundColor: '#f8f8f8', 

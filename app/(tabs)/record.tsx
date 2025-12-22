@@ -1,9 +1,8 @@
 import * as FileSystem from 'expo-file-system/legacy';
-import { useRouter } from 'expo-router'; // <-- 引入 useRouter
+import { useRouter } from 'expo-router'; // 引入 useRouter
 import React, { useState } from "react";
 import { ScrollView, StyleSheet, Text } from "react-native";
 
-// --- 新增引入 (在頂部) ---
 import { saveRecord } from '@/services/historyService'; 
 import { ElderSummary } from '@/components/ElderSummaryDisplay';
 
@@ -36,9 +35,9 @@ export default function RecordScreen() {
     setLoading(true);
 
     let transcription = "正在處理中...";
-    // VVV [新增] 用於儲存解析後的 ElderSummary 物件 VVV
+    // 用於儲存解析後的 ElderSummary 物件 
     let finalSummary: ElderSummary | null = null; 
-    // VVV [修改] 保持這個變數用於導航 (JSON 字串) VVV
+    // 保持這個變數用於導航 (JSON 字串) 
     let finalSummaryJson: string | null = null;
 
     try {
@@ -88,7 +87,7 @@ export default function RecordScreen() {
             } else {
               finalSummaryJson = null;
             }
-       // ^^^ [修改/新增] ^^^
+  
           } else {
             console.error("Summary Server Error:", summaryResult);
             transcription += `\n\n❌ Summary failed: ${summaryResult?.error || "Unknown error"}`;
@@ -99,7 +98,7 @@ export default function RecordScreen() {
       } else {
         console.error("STT Server Error:", result);
 
-        // Check for specific error types
+
         const errorMessage = result.error?.message || result.error || "Unknown error";
         const errorStatus = result.error?.status;
 
@@ -120,7 +119,7 @@ export default function RecordScreen() {
     } finally {
       setLoading(false);
       
-      // *** 導航到新的分析頁面，並傳遞結果 ***
+      // 導航到新的分析頁面，並傳遞結果 
       router.push({
           pathname: "/(tabs)/analysis",
           params: { 
