@@ -17,7 +17,7 @@ export default function TabLayout() {
         tabBarButton: HapticTab,
       }}>
 
-      {/* 1. 新增 History Tab */}
+      {/*新增 History Tab*/}
       <Tabs.Screen
         name="history"
         options={{
@@ -33,7 +33,7 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="mic.fill" color={color} />,
         }}
       />
-      {/* 新增 analysis 頁面，它屬於 Tab Layout 群組，但隱藏其 Tab Bar 按鈕 */}
+      {/*新增 analysis 頁面*/}
       <Tabs.Screen
         name="analysis" // 對應 app/(tabs)/analysis.tsx
         options={{

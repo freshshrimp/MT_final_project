@@ -1,5 +1,3 @@
-// chengen1018/mt_final/MT_final-main/components/ElderSummaryDisplay.tsx
-
 import * as Speech from 'expo-speech';
 import React, { useState } from "react";
 import { Button, StyleSheet, Text, View } from "react-native";
@@ -58,7 +56,7 @@ const handleReadAloud = async () => {
             // 情況 2: 未朗讀 -> 開始朗讀
             setIsReading(true);
             
-            // 移除 onStop 屬性，因為它不是標準的 SpeechOptions
+            // 移除 onStop 屬性
             Speech.speak(text, {
                 language: 'en-US', 
                 rate: 0.9,
@@ -95,10 +93,6 @@ const handleReadAloud = async () => {
 
 const ElderSummaryDisplay: React.FC<{ summary: ElderSummary }> = ({ summary }) => {
     
-    // VVV [移除] 將 audio_summary 內容作為 Diagnosis 區塊的朗讀腳本 VVV
-    // const diagnosisTextToRead = summary?.audio_summary;
-
-    // VVV [新增] 改為建構一個僅包含診斷信息的朗讀腳本 VVV
     const diagnosisTextToRead = [
         summary?.diagnosis?.condition?.trim(),
         summary?.diagnosis?.reason?.trim() ? `Possible Cause: ${summary.diagnosis.reason}` : null,
